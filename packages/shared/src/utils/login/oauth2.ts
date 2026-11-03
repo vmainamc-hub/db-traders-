@@ -1,5 +1,6 @@
 /* eslint-disable no-console */
 import { DERIV_OAUTH_CLIENT_ID, DERIV_OAUTH_REDIRECT_URI } from '../config/config';
+import { buildLoginQuery, OAUTH_ACCOUNTS_KEY, OAUTH_STORAGE_KEY, readOAuthAccounts } from './oauth-accounts';
 
 /**
  * Deriv's new OAuth 2.0 (Authorization Code + PKCE) sign-in.
@@ -12,8 +13,6 @@ const ACCOUNTS_URL = 'https://api.derivws.com/trading/v1/options/accounts';
 const SCOPE = 'trade';
 const VERIFIER_KEY = 'deriv_oauth_code_verifier';
 const STATE_KEY = 'deriv_oauth_state';
-export const OAUTH_STORAGE_KEY = 'deriv_oauth_session';
-export const OAUTH_ACCOUNTS_KEY = 'deriv_oauth_accounts_raw';
 
 const base64Url = (bytes: Uint8Array) =>
     btoa(String.fromCharCode(...Array.from(bytes)))
@@ -141,7 +140,19 @@ export const handleOAuth2Callback = (): boolean => {
             } catch (e) {
                 lines.push('', `Accounts request failed: ${(e as Error).message}`);
             }
-            showStatus('Signed in', lines, true);
+
+            // Hand the login to the app: it expects acct1/token1/cur1... in the address, calls
+            // `authorize` and builds its own account list from the answer. Old stored accounts
+            // are cleared first, otherwise the app treats the new login as a token mismatch.
+            const accounts = readOAuthAccounts();
+            if (accounts.length) {
+                localStorage.removeItem('client.accounts');
+                localStorage.removeItem('active_loginid');
+                window.location.replace(`/?${buildLoginQuery(accounts)}`);
+                return;
+            }
+            lines.push('', 'No accounts were returned, so the app was not opened.');
+            showStatus('Signed in, but no accounts', lines, false);
         } catch (e) {
             console.error(e);
             showStatus('Sign in failed', [(e as Error).message], false);
