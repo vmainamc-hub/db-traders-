@@ -8,7 +8,7 @@ import 'promise-polyfill';
 import registerServiceWorker from 'Utils/pwa';
 import initStore from 'App/initStore';
 import App from 'App/app.jsx';
-import { checkAndSetEndpointFromUrl, handleOAuth2Callback } from '@deriv/shared';
+import { checkAndSetEndpointFromUrl, handleOAuth2Callback, initDebugPanel } from '@deriv/shared';
 import AppNotificationMessages from './App/Containers/app-notification-messages.jsx';
 
 if (
@@ -25,6 +25,7 @@ if (
 if (window.localStorage.getItem('exchange_rates')) {
     window.localStorage.removeItem('exchange_rates');
 }
+initDebugPanel();
 const has_endpoint_url = checkAndSetEndpointFromUrl();
 const is_oauth_callback = !has_endpoint_url && handleOAuth2Callback();
 

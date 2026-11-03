@@ -114,6 +114,14 @@ const toLegacyResponse = (response: any) => {
     return response;
 };
 
+const report = (detail: Record<string, unknown>) => {
+    try {
+        window.dispatchEvent(new CustomEvent('deriv-socket-log', { detail }));
+    } catch (e) {
+        // logging must never break the socket
+    }
+};
+
 export const createDerivSocket = (): WebSocket => {
     const ws = new WebSocket(DERIV_PUBLIC_WS_URL);
     const nativeAdd = ws.addEventListener.bind(ws);
@@ -138,6 +146,9 @@ export const createDerivSocket = (): WebSocket => {
     nativeAdd('message', (event: Event) => {
         const raw = (event as MessageEvent).data;
         const parsed = parse(raw);
+        if (parsed) {
+            report({ dir: 'in', type: parsed.msg_type, error: parsed.error });
+        }
         emit(parsed ? toLegacyResponse(parsed) : raw);
     });
 
@@ -147,6 +158,7 @@ export const createDerivSocket = (): WebSocket => {
             nativeSend(data);
             return;
         }
+        report({ dir: 'out', type: Object.keys(request).find(key => key !== 'req_id') });
         const reply = localReply(request);
         if (reply) {
             setTimeout(() => emit(reply), 0);

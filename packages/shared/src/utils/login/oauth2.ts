@@ -9,7 +9,7 @@ import { DERIV_OAUTH_CLIENT_ID, DERIV_OAUTH_REDIRECT_URI } from '../config/confi
 const AUTH_URL = 'https://auth.deriv.com/oauth2/auth';
 const TOKEN_URL = 'https://auth.deriv.com/oauth2/token';
 const ACCOUNTS_URL = 'https://api.derivws.com/trading/v1/options/accounts';
-const SCOPE = 'trade account_manage';
+const SCOPE = 'trade';
 const VERIFIER_KEY = 'deriv_oauth_code_verifier';
 const STATE_KEY = 'deriv_oauth_state';
 export const OAUTH_STORAGE_KEY = 'deriv_oauth_session';
