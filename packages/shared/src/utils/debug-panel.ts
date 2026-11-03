@@ -84,6 +84,40 @@ export const initDebugPanel = () => {
         else if (d.error) add(`<- ${d.type} ERROR ${d.error.code || ''}: ${d.error.message || ''}`.slice(0, 300));
         else add(`<- ${d.type} ok`);
     });
+    // Track script files (lazy chunks): report failures, the trading chunks, and anything still loading.
+    const short = (u: string) => u.replace(/^https?:\/\/[^/]+/, '').slice(0, 90);
+    const pending = new Map<string, number>();
+    const watchScript = (el: HTMLScriptElement) => {
+        const src = el.src;
+        if (!src || !/\/js\//.test(src)) return;
+        pending.set(src, Date.now());
+        el.addEventListener('load', () => {
+            pending.delete(src);
+            if (/trader|trade|core\.main/i.test(src)) add(`js ok ${short(src)}`);
+        });
+        el.addEventListener('error', () => {
+            pending.delete(src);
+            add(`FAIL js ${short(src)}`, true);
+        });
+    };
+    try {
+        new MutationObserver(mutations =>
+            mutations.forEach(m =>
+                m.addedNodes.forEach(node => {
+                    if (node instanceof HTMLScriptElement) watchScript(node);
+                })
+            )
+        ).observe(document.documentElement, { childList: true, subtree: true });
+        document.querySelectorAll('script[src]').forEach(el => watchScript(el as HTMLScriptElement));
+        setInterval(() => {
+            if (pending.size) {
+                add(`js still loading: ${Array.from(pending.keys()).map(short).join(' , ')}`.slice(0, 400));
+            }
+        }, 6000);
+    } catch (e) {
+        add('ERROR script watcher failed');
+    }
+
     let last_state = '';
     window.addEventListener('deriv-state-log', (e: Event) => {
         const state = JSON.stringify((e as CustomEvent).detail || {});
