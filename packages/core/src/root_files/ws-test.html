@@ -1,0 +1,88 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Connection test</title>
+<style>
+  body{font-family:system-ui,Arial,sans-serif;max-width:640px;margin:24px auto;padding:0 16px;color:#222}
+  button{font-size:18px;padding:12px 24px;border:0;border-radius:6px;background:#ff444f;color:#fff;cursor:pointer}
+  button:disabled{background:#999}
+  .row{display:flex;justify-content:space-between;gap:12px;padding:8px 10px;border-bottom:1px solid #eee;font-size:14px;word-break:break-all}
+  .ok{color:#0a7d3b;font-weight:700;white-space:nowrap}
+  .bad{color:#c4121f;font-weight:700;white-space:nowrap}
+  .wait{color:#888;white-space:nowrap}
+  #summary{margin-top:20px;padding:14px;background:#f4f6f8;border-radius:6px;white-space:pre-wrap;font-family:ui-monospace,Consolas,monospace;font-size:13px}
+</style>
+</head>
+<body>
+<h2>DBtraders connection test</h2>
+<p>Press the button, wait about 10 seconds, then take a screenshot of this whole page and send it back.</p>
+<button id="run">Run test</button>
+<div id="results"></div>
+<div id="summary" hidden></div>
+<script>
+(function () {
+  var targets = [];
+  ['ws.derivws.com', 'ws.binaryws.com', 'wss.derivws.com'].forEach(function (host) {
+    ['63233', '1089'].forEach(function (id) {
+      targets.push('wss://' + host + '/websockets/v3?app_id=' + id);
+    });
+  });
+  targets.push('wss://api.derivws.com/trading/v1/options/ws/public');
+
+  var btn = document.getElementById('run');
+  var box = document.getElementById('results');
+  var summary = document.getElementById('summary');
+
+  function testOne(url, cell) {
+    return new Promise(function (resolve) {
+      var done = false;
+      var started = Date.now();
+      function finish(ok, text) {
+        if (done) return;
+        done = true;
+        cell.className = ok ? 'ok' : 'bad';
+        cell.textContent = text;
+        resolve({ url: url, ok: ok, text: text });
+      }
+      var ws;
+      try { ws = new WebSocket(url); } catch (e) { finish(false, 'FAILED'); return; }
+      var timer = setTimeout(function () { try { ws.close(); } catch (e) {} finish(false, 'TIMEOUT'); }, 8000);
+      ws.onopen = function () {
+        clearTimeout(timer);
+        finish(true, 'WORKS (' + (Date.now() - started) + ' ms)');
+        try { ws.close(); } catch (e) {}
+      };
+      ws.onerror = function () { clearTimeout(timer); finish(false, 'FAILED'); };
+    });
+  }
+
+  btn.onclick = function () {
+    btn.disabled = true;
+    summary.hidden = true;
+    box.innerHTML = '';
+    var jobs = targets.map(function (url) {
+      var row = document.createElement('div');
+      row.className = 'row';
+      var label = document.createElement('span');
+      label.textContent = url.replace('wss://', '');
+      var cell = document.createElement('span');
+      cell.className = 'wait';
+      cell.textContent = 'testing...';
+      row.appendChild(label);
+      row.appendChild(cell);
+      box.appendChild(row);
+      return testOne(url, cell);
+    });
+    Promise.all(jobs).then(function (res) {
+      btn.disabled = false;
+      var lines = res.map(function (r) { return (r.ok ? 'WORKS  ' : 'FAILED ') + r.url.replace('wss://', ''); });
+      summary.textContent = 'Time: ' + new Date().toISOString() + '\n' + lines.join('\n');
+      summary.hidden = false;
+    });
+  };
+})();
+</script>
+</body>
+</html>
