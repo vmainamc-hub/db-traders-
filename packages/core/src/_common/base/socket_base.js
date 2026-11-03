@@ -1,6 +1,7 @@
 const DerivAPIBasic = require('@deriv/deriv-api/dist/DerivAPIBasic');
 const getAppId = require('@deriv/shared').getAppId;
 const getSocketURL = require('@deriv/shared').getSocketURL;
+const createDerivSocket = require('@deriv/shared').createDerivSocket;
 const cloneObject = require('@deriv/shared').cloneObject;
 const getPropertyValue = require('@deriv/shared').getPropertyValue;
 const State = require('@deriv/shared').State;
@@ -81,7 +82,7 @@ const BinarySocketBase = (() => {
 
         if (isClose()) {
             is_disconnect_called = false;
-            binary_socket = new WebSocket(getSocketUrl(language, session_id));
+            binary_socket = session_id ? new WebSocket(getSocketUrl(language, session_id)) : createDerivSocket();
 
             deriv_api = new DerivAPIBasic({
                 connection: binary_socket,

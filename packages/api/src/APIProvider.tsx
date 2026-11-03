@@ -1,7 +1,7 @@
 import React, { PropsWithChildren, createContext, useCallback, useContext, useEffect, useRef, useState } from 'react';
 // @ts-expect-error `@deriv/deriv-api` is not in TypeScript, Hence we ignore the TS error.
 import DerivAPIBasic from '@deriv/deriv-api/dist/DerivAPIBasic';
-import { getAppId, getSocketURL, useWS } from '@deriv/shared';
+import { createDerivSocket, getAppId, getSocketURL, useWS } from '@deriv/shared';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import {
     TSocketEndpointNames,
@@ -82,7 +82,7 @@ const getWebsocketInstance = (wss_url: string, onWSClose: () => void) => {
         !(existingWebsocketInstance instanceof WebSocket) ||
         [2, 3].includes(existingWebsocketInstance.readyState)
     ) {
-        window.WSConnections[wss_url] = new WebSocket(wss_url);
+        window.WSConnections[wss_url] = createDerivSocket();
         window.WSConnections[wss_url].addEventListener('close', () => {
             if (typeof onWSClose === 'function') onWSClose();
         });
