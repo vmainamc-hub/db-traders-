@@ -62,6 +62,22 @@ export const initDebugPanel = () => {
         add(`ERROR console: ${args.map(a => (a instanceof Error ? `${a.message}\n${(a.stack || '').split('\n').slice(0, 3).join('\n')}` : String(a))).join(' ')}`.slice(0, 500), true);
         original_error.apply(console, args as []);
     };
+    // Log requests that fail or return a web page instead of data (e.g. a missing file served as index.html).
+    const original_fetch = window.fetch.bind(window);
+    window.fetch = async (input: RequestInfo | URL, init?: RequestInit) => {
+        const url = typeof input === 'string' ? input : (input as Request).url || String(input);
+        try {
+            const response = await original_fetch(input, init);
+            const content_type = (response.headers.get('content-type') || '').split(';')[0];
+            if (!response.ok || /text\/html/i.test(content_type)) {
+                add(`FAIL fetch ${response.status} ${content_type} ${url}`.slice(0, 300), true);
+            }
+            return response;
+        } catch (err) {
+            add(`FAIL fetch network ${url}: ${(err as Error).message}`.slice(0, 300), true);
+            throw err;
+        }
+    };
     window.addEventListener('deriv-socket-log', (e: Event) => {
         const d = (e as CustomEvent).detail || {};
         if (d.dir === 'out') add(`-> ${d.type}`);

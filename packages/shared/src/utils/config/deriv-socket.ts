@@ -434,6 +434,18 @@ export const createDerivSocket = (): WebSocket => {
     };
 
     nativeAdd('message', (event: Event) => handleIncoming((event as MessageEvent).data, false));
+    // Connection lifecycle, shown in the on-screen debug panel (?debug=1).
+    nativeAdd('open', () => report({ dir: 'in', type: 'socket open' }));
+    nativeAdd('error', () =>
+        report({ dir: 'in', type: 'socket', error: { code: 'error', message: 'connection error (public ws)' } })
+    );
+    nativeAdd('close', (event: Event) =>
+        report({
+            dir: 'in',
+            type: 'socket',
+            error: { code: String((event as CloseEvent).code), message: `closed ${(event as CloseEvent).reason || ''}` },
+        })
+    );
 
     const closeAuthorized = () => {
         const socket = authorized;
