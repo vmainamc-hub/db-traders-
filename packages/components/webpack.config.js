@@ -4,6 +4,10 @@ const path = require('path');
 
 module.exports = function () {
     return {
+        // Avoid Webpack's full module-size stats serialization. The current
+        // dependency tree contains a RawSource with undefined content, which
+        // crashes StatsFactory after compilation has completed.
+        stats: 'errors-only',
         entry: {
             'icon/js/icons': 'Components/icon/icons.js',
         },
@@ -29,14 +33,14 @@ module.exports = function () {
         module: {
             rules: [
                 {
-                    test: /\.svg$/,
+                    test: /\\.svg$/,
                     use: [
                         {
                             loader: 'svg-sprite-loader',
                             options: {
                                 extract: true,
                                 spriteFilename: svgPath => {
-                                    const category = /components\/icon\/([\w-]*)/.exec(svgPath)[1];
+                                    const category = /components\\/icon\\/([\\w-]*)/.exec(svgPath)[1];
 
                                     return category ? `${category}.[contenthash].svg` : 'common.[contenthash].svg';
                                 },
@@ -89,8 +93,8 @@ module.exports = function () {
                 'react-swipeable': 'react-swipeable',
                 'react-tiny-popover': 'react-tiny-popover',
             },
-            /^@deriv\/shared\/.+$/,
-            /^@deriv\/translations\/.+$/,
+            /^@deriv\\/shared\\/.+$/,
+            /^@deriv\\/translations\\/.+$/,
         ],
     };
 };
