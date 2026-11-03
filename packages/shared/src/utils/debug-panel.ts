@@ -84,5 +84,13 @@ export const initDebugPanel = () => {
         else if (d.error) add(`<- ${d.type} ERROR ${d.error.code || ''}: ${d.error.message || ''}`.slice(0, 300));
         else add(`<- ${d.type} ok`);
     });
+    let last_state = '';
+    window.addEventListener('deriv-state-log', (e: Event) => {
+        const state = JSON.stringify((e as CustomEvent).detail || {});
+        if (state !== last_state) {
+            last_state = state;
+            add(`STATE ${state}`);
+        }
+    });
     add('debug panel on');
 };

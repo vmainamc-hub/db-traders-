@@ -2172,6 +2172,10 @@ export default class ClientStore extends BaseStore {
             }
 
             if (authorize_response.error) {
+                // Never leave the flag on after a failed login: the trader waits for it before loading anything.
+                runInAction(() => {
+                    this.is_populating_account_list = false;
+                });
                 return authorize_response;
             }
 
@@ -2187,6 +2191,7 @@ export default class ClientStore extends BaseStore {
                         code: 'MismatchedAcct',
                         message: localize('Invalid token'),
                     };
+                    this.is_populating_account_list = false;
                 }
             });
             return authorize_response;

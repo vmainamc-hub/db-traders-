@@ -150,6 +150,7 @@ const LEGACY_STUBS: Record<string, (request?: any) => Record<string, unknown>> =
     trading_servers: () => [] as unknown as Record<string, unknown>,
     trading_platform_available_accounts: () => [] as unknown as Record<string, unknown>,
     trading_platform_accounts: () => [] as unknown as Record<string, unknown>,
+    account_security: () => ({ totp: { is_enabled: 0 } }),
     get_self_exclusion: () => ({}),
     get_limits: () => ({}),
     get_financial_assessment: () => ({}),
