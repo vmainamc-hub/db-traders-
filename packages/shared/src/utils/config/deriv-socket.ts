@@ -64,6 +64,10 @@ const toLegacyActiveSymbol = (item: any, index: number) => ({
     market_display_name: MARKET_NAMES[item.market] || humanize(item.market),
     submarket_display_name: humanize(item.submarket),
     subgroup_display_name: humanize(item.subgroup),
+    allow_forward_starting: 0,
+    delay_amount: 0,
+    exchange_name: '',
+    intraday_interval_minutes: 0,
 });
 
 const parse = (data: unknown) => {
@@ -101,7 +105,27 @@ const localReply = (request: any): Record<string, unknown> | null => {
  * Legacy calls the new API has no equivalent for. They get an empty but correctly
  * shaped answer so the parts of the app waiting on them can continue.
  */
-const LEGACY_STUBS: Record<string, () => Record<string, unknown>> = {
+const FORWARDED_CALLS = [
+    'contracts_for',
+    'active_symbols',
+    'proposal',
+    'proposal_open_contract',
+    'buy',
+    'sell',
+    'cancel',
+    'contract_update',
+    'contract_update_history',
+    'ticks',
+    'ticks_history',
+    'portfolio',
+    'profit_table',
+    'statement',
+    'transaction',
+    'trading_times',
+    'trading_durations',
+];
+
+const LEGACY_STUBS: Record<string, (request?: any) => Record<string, unknown>> = {
     get_settings: () => ({ email: '', country_code: '', preferred_language: 'EN' }),
     set_settings: () => 1 as unknown as Record<string, unknown>,
     get_account_status: () => ({
@@ -130,6 +154,40 @@ const LEGACY_STUBS: Record<string, () => Record<string, unknown>> = {
     get_limits: () => ({}),
     get_financial_assessment: () => ({}),
     login_history: () => [] as unknown as Record<string, unknown>,
+    crypto_config: () => ({ currencies_config: {} }),
+    // Only same-currency rates are known locally; the trader needs this to price stakes in the account currency.
+    exchange_rates: (request: any = {}) => {
+        const base = request.base_currency || 'USD';
+        const target = request.target_currency || base;
+        return {
+            base_currency: base,
+            date: Math.floor(Date.now() / 1000),
+            rates: base === target ? { [target]: 1 } : {},
+        };
+    },
+};
+
+// ---------------------------------------------------------------------------
+// Differences between the legacy API and the new one, from Deriv's migration
+// notes (developers.deriv.com/comparison/...). Requests are translated to the
+// new format and responses back to what this app was written to read.
+// ---------------------------------------------------------------------------
+
+const REMOVED_REQUEST_KEYS = ['loginid', 'account', 'product_type', 'date_start', 'barrier_range', 'trade_risk_profile'];
+const REMOVED_PARAMETER_KEYS = [
+    'barrier_range',
+    'date_start',
+    'product_type',
+    'trade_risk_profile',
+    'trading_period_start',
+];
+
+/** The new API has HIGHER/LOWER for barrier contracts where the legacy API reused CALL/PUT. */
+const withBarrierContractType = (contract_type: unknown, barrier: unknown) => {
+    const has_barrier = barrier !== undefined && barrier !== null && barrier !== '';
+    if (has_barrier && contract_type === 'CALL') return 'HIGHER';
+    if (has_barrier && contract_type === 'PUT') return 'LOWER';
+    return contract_type;
 };
 
 /** Legacy request -> new API request. */
@@ -139,16 +197,173 @@ const toNewRequest = (request: any) => {
         result.underlying_symbol = result.symbol;
         delete result.symbol;
     }
-    if (result.parameters && 'symbol' in result.parameters) {
-        result.parameters = { ...result.parameters, underlying_symbol: result.parameters.symbol };
-        delete result.parameters.symbol;
+    if (result.parameters && typeof result.parameters === 'object') {
+        const parameters = { ...result.parameters };
+        if ('symbol' in parameters) {
+            parameters.underlying_symbol = parameters.symbol;
+            delete parameters.symbol;
+        }
+        REMOVED_PARAMETER_KEYS.forEach(key => delete parameters[key]);
+        if (parameters.contract_type) {
+            parameters.contract_type = withBarrierContractType(parameters.contract_type, parameters.barrier);
+        }
+        result.parameters = parameters;
     }
-    ['loginid', 'account', 'product_type', 'date_start', 'barrier_range', 'trade_risk_profile'].forEach(key => {
-        delete result[key];
-    });
-    if (result.active_symbols !== undefined) delete result.landing_company;
+    REMOVED_REQUEST_KEYS.forEach(key => delete result[key]);
+    if (result.proposal !== undefined) {
+        delete result.trading_period_start;
+        result.contract_type = withBarrierContractType(result.contract_type, result.barrier);
+    }
+    if (result.active_symbols !== undefined) {
+        ['landing_company', 'landing_company_short', 'barrier_category'].forEach(key => delete result[key]);
+    }
+    if (result.contracts_for !== undefined) {
+        ['currency', 'landing_company', 'landing_company_short'].forEach(key => delete result[key]);
+    }
     return result;
 };
+
+const CONTRACT_DISPLAY: Record<string, string> = {
+    CALL: 'Higher',
+    PUT: 'Lower',
+    CALLE: 'Higher or equal',
+    PUTE: 'Lower or equal',
+    DIGITMATCH: 'Matches',
+    DIGITDIFF: 'Differs',
+    DIGITEVEN: 'Even',
+    DIGITODD: 'Odd',
+    DIGITOVER: 'Over',
+    DIGITUNDER: 'Under',
+    ONETOUCH: 'Touches',
+    NOTOUCH: 'Does Not Touch',
+    EXPIRYRANGE: 'Ends Between',
+    EXPIRYMISS: 'Ends Outside',
+    EXPIRYRANGEE: 'Ends Between',
+    EXPIRYMISSE: 'Ends Outside',
+    RANGE: 'Stays Between',
+    UPORDOWN: 'Goes Outside',
+    ASIANU: 'Asian Up',
+    ASIAND: 'Asian Down',
+    TICKHIGH: 'High Tick',
+    TICKLOW: 'Low Tick',
+    RUNHIGH: 'Only Ups',
+    RUNLOW: 'Only Downs',
+    MULTUP: 'Multiply Up',
+    MULTDOWN: 'Multiply Down',
+    ACCU: 'Accumulator Up',
+    VANILLALONGCALL: 'Call',
+    VANILLALONGPUT: 'Put',
+    TURBOSLONG: 'Turbo Long',
+    TURBOSSHORT: 'Turbo Short',
+    RESETCALL: 'Reset Call',
+    RESETPUT: 'Reset Put',
+};
+
+const CATEGORY_DISPLAY: Record<string, string> = {
+    callput: 'Up/Down',
+    callputequal: 'Rise/Fall Equal',
+    digits: 'Digits',
+    touchnotouch: 'Touch/No Touch',
+    endsinout: 'Ends In/Out',
+    staysinout: 'Stays In/Out',
+    asian: 'Asians',
+    highlowticks: 'High/Low Ticks',
+    runs: 'Only Ups/Only Downs',
+    multiplier: 'Multipliers',
+    accumulator: 'Accumulators',
+    vanilla: 'Vanilla Options',
+    turbos: 'Turbos',
+    reset: 'Reset Call/Reset Put',
+};
+
+const barrierCategoryFor = (contract: any) => {
+    switch (contract.contract_category) {
+        case 'callput':
+        case 'callputequal':
+            return Number(contract.barriers) > 0 ? 'euro_non_atm' : 'euro_atm';
+        case 'touchnotouch':
+        case 'staysinout':
+            return 'american';
+        case 'endsinout':
+            return 'euro_non_atm';
+        case 'asian':
+            return 'asian';
+        case 'reset':
+            return 'reset';
+        default:
+            return 'non_financial';
+    }
+};
+
+const toLegacyContractType = (value: unknown) => (value === 'HIGHER' ? 'CALL' : value === 'LOWER' ? 'PUT' : value);
+
+/** contracts_for items lost their display fields and start_type; the trader reads all of them. */
+const toLegacyContractsFor = (response: any) => {
+    const contracts_for = response.contracts_for;
+    if (!contracts_for || !Array.isArray(contracts_for.available)) return response;
+    return {
+        ...response,
+        contracts_for: {
+            ...contracts_for,
+            available: contracts_for.available.map((contract: any) => {
+                const contract_type = toLegacyContractType(contract.contract_type) as string;
+                return {
+                    exchange_name: '',
+                    start_type: 'spot',
+                    ...contract,
+                    contract_type,
+                    barrier_category: contract.barrier_category || barrierCategoryFor(contract),
+                    contract_category_display:
+                        contract.contract_category_display ||
+                        CATEGORY_DISPLAY[contract.contract_category] ||
+                        humanize(contract.contract_category),
+                    contract_display:
+                        contract.contract_display || CONTRACT_DISPLAY[contract_type] || humanize(contract_type),
+                };
+            }),
+        },
+    };
+};
+
+const NUMERIC_CONTRACT_FIELDS = ['bid_price', 'buy_price', 'current_spot', 'profit', 'payout', 'sell_price'];
+
+/** Walks a response and restores the legacy names the new API renamed (symbol, HIGHER/LOWER). */
+const legacyizeDeep = (value: any): any => {
+    if (Array.isArray(value)) return value.map(legacyizeDeep);
+    if (!value || typeof value !== 'object') return value;
+    const result: Record<string, any> = {};
+    Object.keys(value).forEach(key => {
+        result[key] = key === 'contract_type' ? toLegacyContractType(value[key]) : legacyizeDeep(value[key]);
+    });
+    if (typeof result.underlying_symbol === 'string') {
+        if (result.symbol === undefined) result.symbol = result.underlying_symbol;
+        if (result.underlying === undefined) result.underlying = result.underlying_symbol;
+    }
+    return result;
+};
+
+const toLegacyOpenContract = (contract: any) => {
+    const result = { ...contract };
+    NUMERIC_CONTRACT_FIELDS.forEach(key => {
+        if (typeof result[key] === 'string' && result[key] !== '' && !Number.isNaN(Number(result[key]))) {
+            result[key] = Number(result[key]);
+        }
+    });
+    // sell_spot / sell_spot_time are deprecated in favour of exit_spot / exit_spot_time.
+    if (result.sell_spot === undefined && result.exit_spot !== undefined) result.sell_spot = Number(result.exit_spot);
+    if (result.sell_spot_time === undefined && result.exit_spot_time !== undefined) {
+        result.sell_spot_time = result.exit_spot_time;
+    }
+    if (result.exit_tick_display_value === undefined && result.exit_tick !== undefined) {
+        result.exit_tick_display_value = String(result.exit_tick);
+    }
+    if (result.sell_spot_display_value === undefined && result.exit_spot !== undefined) {
+        result.sell_spot_display_value = String(result.exit_spot);
+    }
+    return result;
+};
+
+const WALKED_MESSAGES = ['contracts_for', 'proposal_open_contract', 'portfolio', 'profit_table', 'transaction', 'statement', 'buy', 'sell'];
 
 /** New API response -> legacy response shape. */
 const toLegacyResponse = (response: any) => {
@@ -159,6 +374,14 @@ const toLegacyResponse = (response: any) => {
     if (response.msg_type === 'proposal' && response.proposal && response.proposal.display_value === undefined) {
         return { ...response, proposal: { ...response.proposal, display_value: String(response.proposal.ask_price) } };
     }
+    if (response.msg_type === 'contracts_for') {
+        return toLegacyContractsFor(legacyizeDeep(response));
+    }
+    if (response.msg_type === 'proposal_open_contract' && response.proposal_open_contract) {
+        const walked = legacyizeDeep(response);
+        return { ...walked, proposal_open_contract: toLegacyOpenContract(walked.proposal_open_contract) };
+    }
+    if (WALKED_MESSAGES.includes(response.msg_type)) return legacyizeDeep(response);
     return response;
 };
 
@@ -201,6 +424,10 @@ export const createDerivSocket = (): WebSocket => {
         const text = from_authorized && typeof raw === 'string' ? realToAlias(raw) : raw;
         const parsed = parse(text);
         if (parsed) {
+            // The new API's balance message has no loginid; the app matches it to the account by that field.
+            if (from_authorized && parsed.msg_type === 'balance' && parsed.balance && !parsed.balance.loginid) {
+                parsed.balance.loginid = active_loginid;
+            }
             report({ dir: 'in', type: parsed.msg_type, error: parsed.error });
         }
         emit(parsed ? toLegacyResponse(parsed) : text);
@@ -361,9 +588,12 @@ export const createDerivSocket = (): WebSocket => {
             return;
         }
 
-        const stub_name = Object.keys(LEGACY_STUBS).find(key => key in request);
+        // A stub name can also appear as a plain parameter of a real call (contracts_for carries
+        // `landing_company`), so stubs only apply when the request is not one of the forwarded calls.
+        const is_forwarded_call = FORWARDED_CALLS.some(key => key in request);
+        const stub_name = is_forwarded_call ? undefined : Object.keys(LEGACY_STUBS).find(key => key in request);
         if (stub_name) {
-            const value = LEGACY_STUBS[stub_name]();
+            const value = LEGACY_STUBS[stub_name](request);
             setTimeout(() => emit({ ...echo, msg_type: stub_name, [stub_name]: value }), 0);
             return;
         }

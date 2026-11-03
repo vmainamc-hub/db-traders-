@@ -33,6 +33,17 @@ type Apptypes = {
     WS: TWebSocket;
 };
 
+// Defined once at module level. When this was created inside AppWrapper, every re-render produced a
+// brand-new component type, so React tore the whole Manual trader down and rebuilt it each time.
+const Trader = Loadable({
+    loader: () => import(/* webpackChunkName: "error-component" */ '@deriv/trader'),
+    loading: UILoader,
+    render(loaded, props) {
+        const Component = loaded.default;
+        return <Component passthrough={props} />;
+    },
+});
+
 const AppWrapper = observer(() => {
     const { dashboard, load_modal, run_panel, quick_strategy, summary_card } = useDBotStore();
     const {
@@ -157,15 +168,6 @@ const AppWrapper = observer(() => {
         // eslint-disable-next-line react-hooks/exhaustive-deps
         [active_tab]
     );
-
-    const Trader = Loadable({
-        loader: () => import(/* webpackChunkName: "error-component" */ '@deriv/trader'),
-        loading: UILoader,
-        render(loaded, props) {
-            const Component = loaded.default;
-            return <Component passthrough={props} />;
-        },
-    });
 
     return (
         <React.Fragment>
