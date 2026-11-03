@@ -137,7 +137,7 @@ export const getDebugServiceWorker = () => {
     return false;
 };
 
-// New Deriv API OAuth application configuration for dbtradders.netlify.app.
+// New Deriv API OAuth application configuration for dbbtradders.netlify.app.
 // This client ID is for OAuth 2.0; do not use it in legacy /websockets/v3?app_id= URLs.
 export const DERIV_OAUTH_CLIENT_ID = '34xH6e3NlK0tqfZuahfVj';
-export const DERIV_OAUTH_REDIRECT_URI = 'https://dbtradders.netlify.app/callback';
+export const DERIV_OAUTH_REDIRECT_URI = 'https://dbbtradders.netlify.app/callback';
