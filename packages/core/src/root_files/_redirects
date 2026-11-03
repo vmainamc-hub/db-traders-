@@ -1,0 +1,2 @@
+# Serve the app for the OAuth sign-in return address
+/callback  /index.html  200

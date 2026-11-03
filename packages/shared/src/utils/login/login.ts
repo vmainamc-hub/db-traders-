@@ -3,6 +3,7 @@ import { domain_app_ids, getAppId } from '../config/config';
 import { CookieStorage, isStorageSupported, LocalStore } from '../storage/storage';
 import { getStaticUrl, urlForCurrentDomain } from '../url';
 import { deriv_urls } from '../url/constants';
+import { startOAuth2Login } from './oauth2';
 
 export const redirectToLogin = (is_logged_in: boolean, language: string, has_params = true, redirect_delay = 0) => {
     if (!is_logged_in && isStorageSupported(sessionStorage)) {
@@ -10,8 +11,9 @@ export const redirectToLogin = (is_logged_in: boolean, language: string, has_par
         const redirect_url = has_params ? window.location.href : `${l.protocol}//${l.host}${l.pathname}`;
         sessionStorage.setItem('redirect_url', redirect_url);
         setTimeout(() => {
-            const new_href = loginUrl({ language });
-            window.location.href = new_href;
+            startOAuth2Login().catch(() => {
+                window.location.href = loginUrl({ language });
+            });
         }, redirect_delay);
     }
 };

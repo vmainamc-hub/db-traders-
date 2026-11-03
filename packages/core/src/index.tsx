@@ -8,7 +8,7 @@ import 'promise-polyfill';
 import registerServiceWorker from 'Utils/pwa';
 import initStore from 'App/initStore';
 import App from 'App/app.jsx';
-import { checkAndSetEndpointFromUrl } from '@deriv/shared';
+import { checkAndSetEndpointFromUrl, handleOAuth2Callback } from '@deriv/shared';
 import AppNotificationMessages from './App/Containers/app-notification-messages.jsx';
 
 if (
@@ -26,9 +26,10 @@ if (window.localStorage.getItem('exchange_rates')) {
     window.localStorage.removeItem('exchange_rates');
 }
 const has_endpoint_url = checkAndSetEndpointFromUrl();
+const is_oauth_callback = !has_endpoint_url && handleOAuth2Callback();
 
-// if has endpoint url, APP will be redirected
-if (!has_endpoint_url) {
+// if has endpoint url, APP will be redirected. On the OAuth callback page the sign-in is completed instead.
+if (!has_endpoint_url && !is_oauth_callback) {
     const root_store = initStore(AppNotificationMessages);
 
     const wrapper = document.getElementById('deriv_app');
