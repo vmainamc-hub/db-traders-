@@ -9,7 +9,7 @@ type TStatesList = Exclude<NonNullable<ReturnType<typeof useSettings>['data']['r
 const useStatesList = (country: TStatesList, options?: TSocketRequestQueryOptions<'states_list'>) => {
     const { data, ...rest } = useQuery('states_list', {
         // The type should be `string`, but it's an alias to string type.
-        payload: { states_list: country },
+        payload: { states_list: country as never },
         options,
     });
 

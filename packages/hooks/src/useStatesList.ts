@@ -6,7 +6,7 @@ import { useFetch } from '@deriv/api';
 const useStatesList = (country: string) => {
     const { data, ...rest } = useFetch('states_list', {
         // The type should be `string`, but it's an alias to string type.
-        payload: { states_list: country },
+        payload: { states_list: country as never },
     });
 
     return { ...rest, data: data?.states_list ?? [] };

@@ -6,7 +6,7 @@ const useAdvertiserRelationsRemoveBlocked = () => {
     const { mutate, data, ...rest } = useAdvertiserRelations();
 
     const removeBlockedAdvertiser = useCallback(
-        (id: number[]) => mutate({ payload: { remove_blocked: id } }),
+        (id: number[]) => mutate({ payload: { remove_blocked: id as [number] } }),
         [mutate]
     );
 
